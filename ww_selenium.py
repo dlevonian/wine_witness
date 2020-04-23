@@ -1,7 +1,9 @@
 
 import time
+import numpy as np
 import re
 import os
+import csv
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -15,25 +17,47 @@ text_file = os.path.join(PATH, 'ww_in_stock_urls.txt')
 with open(text_file, 'r') as f:
     urls = list(f.readlines())
 urls = [s.strip() for s in urls]
-urls = urls[:100]
+# urls = urls[:100]
 
 
 
 tic = time.time()
 
 
-
-def retrieve_wine(urls):
+def retrieve_batch(urls):
 
     driver = webdriver.Chrome(driver_path)
+
+    # batch (list) variables start with underscore 
+    _wine_id, _url, _price,  _winery, _vintage, _wine_type, _wine_style,\
+    _region, _country, _avg_rating, _n_ratings, _td_dict, _reviews, _img_link = ([] for _ in range(14))
     
-    for url in urls:
-        driver.get(url)
+    for count, url in enumerate(urls):
+        
+        time.sleep(2 + np.random.uniform(0,2))
+        try:
+            driver.get(url)
+        except:
+            if count>0:
+                pipeline_save_batch(_wine_id,
+                                    _url,
+                                    _price,
+                                    _winery,
+                                    _vintage,
+                                    _wine_type,
+                                    _wine_style,
+                                    _region,
+                                    _country,
+                                    _avg_rating,
+                                    _n_ratings,
+                                    _td_dict,
+                                    _reviews,
+                                    _img_link,
+                                    )
 
         try:
             xpath_price = '//span[@class="purchaseAvailability__currentPrice--3mO4u"]'
             _ = WebDriverWait(driver, 1).until(EC.presence_of_element_located((By.XPATH, xpath_price)))
-            # element = WebDriverWait(driver, 1).until(EC.presence_of_element_located((By.XPATH, xpath_price)))
             price = driver.find_element_by_xpath(xpath_price).text
             # print(f'Found price: {price}    {url}')
         except:
@@ -64,7 +88,7 @@ def retrieve_wine(urls):
                 n_ratings=0
 
         driver.execute_script("window.scrollTo(0, 1000);")
-        wait1 = WebDriverWait(driver, 1)
+        wait1 = WebDriverWait(driver, 5)
 
         
         td_dict={}
@@ -82,7 +106,7 @@ def retrieve_wine(urls):
                     td_dict[td_key]=td_value  #to be later processed as value=left+width/2 (invariant to scale)
         except:
             taste_dimensions=[]
-
+        
 
         reviews=[]
         try:
@@ -91,28 +115,123 @@ def retrieve_wine(urls):
                     reviews.append(review_card.text)
         except:
             review_cards=[]
-
         
         img_link = driver.find_element_by_xpath('//meta[@property="og:image"]').get_attribute("content")
+         
+        # accumulate the batch
+        _wine_id.append(wine_id)
+        _url.append(url)
+        _price.append(price)
+        _winery.append(winery)
+        _vintage.append(vintage)
+        _wine_type.append(wine_type)
+        _wine_style.append(wine_style)
+        _region.append(region)
+        _country.append(country)
+        _avg_rating.append(avg_rating)
+        _n_ratings.append(n_ratings)
+        _td_dict.append(td_dict)
+        _reviews.append(reviews)
+        _img_link.append(img_link)
+
+        print(f'{count}  {time.time()-tic:.2f} sec  {url}')  
+
+    pipeline_save_batch(_wine_id,
+                        _url,
+                        _price,
+                        _winery,
+                        _vintage,
+                        _wine_type,
+                        _wine_style,
+                        _region,
+                        _country,
+                        _avg_rating,
+                        _n_ratings,
+                        _td_dict,
+                        _reviews,
+                        _img_link,
+                        )
+    
 
 
-    # <a class="anchor__anchor--3DOSm" href="/wine-styles/californian-pinot-noir">Californian Pinot Noir</a>
-    # <div class="wineFacts__factHeading--pXg1x">Wine style</div>
+def pipeline_save_batch(wine_id,
+                        url,
+                        price,
+                        winery,
+                        vintage,
+                        wine_type,
+                        wine_style,
+                        region,
+                        country,
+                        avg_rating,
+                        n_ratings,
+                        td_dict,
+                        reviews,
+                        img_link,
+                        ):
+    
+    # wine_id -- intact
+    # url -- intact
+    price = [float(re.sub(r'[^\d.]', '', x)) for x in price]
+    # winery -- intact
+    # vintage -- intact
+    wine_type = [x[:-6] for x in wine_type]
+    # wine_style -- intact
+    # region -- intact
+    avg_rating = [float(x) for x in avg_rating]
+    n_ratings = [int(re.sub(r'\D', '', x)) for x  in n_ratings]
+    td_light_bold = list(map(lambda s: extract_td(s, 'Light'), td_dict))
+    td_smooth_tannic = list(map(lambda s: extract_td(s, 'Smooth'), td_dict))
+    td_dry_sweet = list(map(lambda s: extract_td(s, 'Dry'), td_dict))
+    td_soft_acidic = list(map(lambda s: extract_td(s, 'Soft'), td_dict))
+    review_1 = remove_utf(list(zip(*reviews))[0])
+    review_2 = remove_utf(list(zip(*reviews))[1])
+    review_3 = remove_utf(list(zip(*reviews))[2])
+    # img_link -- intact
+    
+    zipped_features = zip(wine_id,
+                            url,
+                            price,
+                            winery,
+                            vintage,
+                            wine_type,
+                            wine_style,
+                            region,
+                            country,
+                            avg_rating,
+                            n_ratings,
+                            td_light_bold,
+                            td_smooth_tannic,
+                            td_dry_sweet,
+                            td_soft_acidic,
+                            review_1,
+                            review_2,
+                            review_3,
+                            img_link)
+    # print(list(zipped_features))  # DEBUG
+
+    PATH = '/Central/NYCDSA/_1_scraping/wine_witness/'
+    csv_file = os.path.join(PATH, 'ww_main.csv')
+
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(zipped_features)
 
 
-        # print(winery, vintage)
-        # print(wine_type, region, country)
-        # print(avg_rating, n_ratings)
-        # print(f'CHARS={len(taste_dimensions)}')
-        # print(td_dict)
-        # print(f'REVIEWS={len(reviews)}')
-        # print(reviews)
-        # print('-'*50)
-        # print(img_link)
-        # print('*'*50)
-        # print(wine_style)
-        # print('*'*50)
+def extract_td(td_dict, td):
+    if td not in td_dict.keys():
+        return None
+    left = float(re.search('left: (.+?)(%|p)', td_dict[td]).group(1))
+    width = float(re.search('width: (.+?)%', td_dict[td]).group(1))
+    return left+width/2
 
+
+def remove_utf(arr):
+    return [''.join([char for char in string if ord(char)<128]) for string in arr]
+
+
+test_urls = urls[105:110]
+retrieve_batch(test_urls)
 
 toc = time.time()
 print(f'TIME: {toc-tic:.1f}')
