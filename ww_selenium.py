@@ -12,7 +12,13 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 class WineWitness():
-    
+    """Spider class for scraping vivino.com SKUs
+    Scrapes 18 key features of a wine item SKU
+    Ignores wine items which are not sold by vivino.com (the price field is empty)
+    Approximate scraping speed, optimized for uninterrupted access: 4.5 sec/item, i.e. ~20,000 items per 24 hours
+    Validation, type conversion and formatting is performed BEFORE saving to csv
+    """
+
     driver_path = r'C:\Users\Dmitri Levonian\chromedriver.exe'
     PATH = '/Central/NYCDSA/_1_scraping/wine_witness/'
 
@@ -40,12 +46,12 @@ class WineWitness():
                     print(f'Terminated: could not open {url}')
                     break
             
-                features_raw = self.scrape_raw(url)
+                features = self.retrieve_item(url)
 
-                if features_raw:
-                    features_clean = self.process_features(features_raw)
+                if features:
+                    features = self.process_item(features)
                     try:
-                        writer.writerow(features_clean)
+                        writer.writerow(features)
                     except:        
                         pass
 
@@ -53,7 +59,7 @@ class WineWitness():
             print(f'COMPLETE: {time.time()-self.tic:.2f} sec')  
 
 
-    def scrape_raw(self, url):
+    def retrieve_item(self, url):
         try:
             xpath_price = '//span[@class="purchaseAvailability__currentPrice--3mO4u"]'
             _ = WebDriverWait(self.driver, 1).until(EC.presence_of_element_located((By.XPATH, xpath_price)))
@@ -79,6 +85,7 @@ class WineWitness():
         except:
             wine_type, region, country = None, None, None
         
+        # Extract wine style from 2 possible (different) locations. Not all wines have this field
         try:
             wine_style_header = self.driver.find_element_by_xpath("//*[contains(text(), 'Wine style')]")
             wine_style = wine_style_header.find_element_by_xpath('..//a[@class="anchor__anchor--3DOSm"]').text
@@ -100,7 +107,13 @@ class WineWitness():
 
         self.driver.execute_script("window.scrollTo(0, 1000);")
         wait1 = WebDriverWait(self.driver, 5)
-        
+
+        # Extract the 4 taste dimensions represented as progress bars on vivino website:
+        #  - Light/Bold 
+        #  - Smooth/Tannic
+        #  - Dry/Sweet
+        #  - Soft/Acidic
+        # Some wine SKUs have all 4 dimensions, some only a subset (e.g.3) and some others - none
         td_dict={}
         try:
             taste_dimensions = wait1.until(EC.presence_of_all_elements_located((By.XPATH,
@@ -117,6 +130,7 @@ class WineWitness():
         except:
             taste_dimensions=[]
         
+        # Extract the top 3 helpful reviews
         self.driver.execute_script("window.scrollTo(0, 2000);")
         reviews=[]
         try:
@@ -126,6 +140,7 @@ class WineWitness():
         except:
             review_cards=[]
         
+        # Extract the link to a bottle image (about 40Kb) for possible augmentation of the feature set
         try:
             img_link = self.driver.find_element_by_xpath('//meta[@property="og:image"]').get_attribute("content")
         except:
@@ -148,7 +163,7 @@ class WineWitness():
 
 
     @staticmethod
-    def process_features(features_raw):
+    def process_item(features):
 
         def extract_td(td_dict, td):
             if td not in td_dict.keys():
@@ -173,7 +188,7 @@ class WineWitness():
         n_ratings,
         td_dict,
         reviews,
-        img_link) = features_raw
+        img_link) = features
     
         # wine_id -- intact
         # url -- intact
@@ -217,10 +232,8 @@ class WineWitness():
                 img_link)
 
 
-ww = WineWitness(10_000,19_906)
-ww.deploy()
+if __name__=="__main__":
+    # ww = WineWitness(10_000,19_906)
+    # ww.deploy()
 
-# retrieve_batch(test_urls)
-# toc = time.time()
-# print(f'TIME: {toc-tic:.1f}')
 
