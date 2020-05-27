@@ -1,6 +1,5 @@
 <h1>Wine Witness: a data-driven approach to item promotion at Vivino</h1>
     
-<div class="featured-image" style="background-image:url(https://nycdsa-blog-files.s3.us-east-2.amazonaws.com/2020/05/dmitri-levonian/wine-1692625-1920-148219-Yyxk3gby.jpg)"></div>
 
 <p>If you ever had to make up your mind staring at dozens of similarly priced bottles of Californian Cabernet in a wine store, or if you wanted to learn more about the wine you just tried when travelling, then you probably know of <a href="https://www.vivino.com">Vivino</a>.&nbsp;</p>
 <p>It’s the SoundHound of wines. Just take a picture of the label, and Vivino <span style="font-weight: 400">will match it to one of the 1+ billion label photos in its database and then deliver all its basic information. </span></p>
